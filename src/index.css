@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-darkbg text-white;
+  font-family: 'Inter', sans-serif;
+}
+
+@keyframes gridMove {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(40px); }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseSlow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-gridMove {
+  animation: gridMove 6s linear infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-spinSlow {
+  animation: spinSlow 20s linear infinite;
+}
+
+.animate-pulseSlow {
+  animation: pulseSlow 8s ease-in-out infinite;
+}
