@@ -22,7 +22,14 @@ const Login = () => {
       setUser(user);
 
       toast.success("Welcome back to NoaVoiceAI 🚀");
-      navigate("/welcome");
+      // const onboarded = localStorage.getItem("onboarding_complete")
+
+      // if (!onboarded) {
+      //   navigate("/welcome")
+      // } else {
+      //   navigate("/dashboard")
+      // }
+      navigate("/welcome")
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Login failed");
     } finally {

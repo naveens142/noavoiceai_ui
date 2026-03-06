@@ -1,21 +1,25 @@
 import { Routes, Route, Navigate } from "react-router-dom"
-// import LoginPage from "../features/auth/LoginPage"
+
 import LoginPage from "../pages/LoginPage"
 import RegisterPage from "../features/auth/RegisterPage"
 import WelcomePage from "../features/auth/WelcomePage"
-import ProtectedRoute from "../components/layout/ProtectedRoute"
 import GoogleCallback from "../features/auth/GoogleCallback"
+
+import ProtectedRoute from "../components/layout/ProtectedRoute"
+import DashboardLayout from "../components/layout/DashboardLayout"
+
+import DashboardPage from "../pages/DashboardPage"
+import AgentsPage from "../features/agents/AgentsPage"
+
 export default function AppRouter() {
   return (
     <Routes>
-      {/* Default Route */}
-      {/* <Route path="/" element={<LoginPage />} /> */}
+      {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
-
-      {/* Register */}
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/auth/callback" element={<GoogleCallback />} />
 
-      {/* Protected Welcome Page */}
+      {/* Welcome (keep separate for now) */}
       <Route
         path="/welcome"
         element={
@@ -25,10 +29,31 @@ export default function AppRouter() {
         }
       />
 
-      {/* Fallback */} 
+      {/* Dashboard Routes */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DashboardPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-    <Route path="/" element={<Navigate to="/login" />} />
-    <Route path="/auth/callback" element={<GoogleCallback />} />
+      <Route
+        path="/agents"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <AgentsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Default Redirect */}
+      <Route path="/" element={<Navigate to="/login" />} />
     </Routes>
   )
 }

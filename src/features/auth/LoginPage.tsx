@@ -9,8 +9,8 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { setTokens, setUser } = useAuthStore()
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [email, setEmail] = useState("admin@gmail.com")
+  const [password, setPassword] = useState("Westack@12345")
   const [loading, setLoading] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {

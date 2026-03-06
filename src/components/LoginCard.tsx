@@ -67,6 +67,7 @@ const LoginCard = ({ onSubmit, onGoogleLogin, isLoading }: Props) => {
             type="email"
             required
             placeholder="Email Address"
+            defaultValue="admin@gmail.com"
             disabled={isLoading}
             className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition disabled:opacity-50"
           />
@@ -80,6 +81,7 @@ const LoginCard = ({ onSubmit, onGoogleLogin, isLoading }: Props) => {
             type={showPassword ? "text" : "password"}
             required
             placeholder="Password"
+            defaultValue="Westack@12345"
             disabled={isLoading}
             className="w-full pl-10 pr-10 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition disabled:opacity-50"
           />

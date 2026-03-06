@@ -24,24 +24,30 @@ export default function GoogleCallback() {
 
     async function completeLogin() {
       try {
+        // Set tokens first - this must happen before API calls
         setTokens(accessToken as string, refreshToken as string)
+
+        // Create a temporary request with the token to ensure it's set
+        // Wait a tick to let the store update
+        await new Promise(resolve => setTimeout(resolve, 0))
 
         const user = await getCurrentUser()
         setUser(user)
 
         // Clean URL
-        window.history.replaceState({}, document.title, "/auth/callback")
+        window.history.replaceState({}, document.title, "/welcome")
 
         toast.success("Google login successful 🚀")
         navigate("/welcome")
       } catch (error) {
-        toast.error("Failed to fetch user")
+        console.error("Google callback error:", error)
+        toast.error("Failed to complete authentication")
         navigate("/")
       }
     }
 
     completeLogin()
-  }, [])
+  }, [navigate, setTokens, setUser])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black text-cyan-400">

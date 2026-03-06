@@ -41,7 +41,8 @@ export default function WelcomePage() {
   }
 
   const handleGoDashboard = () => {
-    navigate("/dashboard")
+      localStorage.setItem("onboarding_complete", "true")
+      navigate("/dashboard")
   }
 
   if (loading) {
