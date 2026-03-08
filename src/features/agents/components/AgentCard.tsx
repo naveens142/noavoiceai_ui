@@ -13,29 +13,29 @@ export default function AgentCard({ agent }: Props) {
   return (
     <div
       onClick={() => navigate(`/agents/${agent.id}`)}
-      className="group relative cursor-pointer bg-white/5 backdrop-blur-xl border border-cyan-400/20 rounded-2xl p-4 transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_rgba(0,255,255,0.4)]"
+      className="group relative cursor-pointer bg-white/5 backdrop-blur-xl border border-cyan-400/20 rounded-xl p-3 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(0,255,255,0.3)]"
     >
       {/* Robot Image */}
-      <div className="flex justify-center -mt-6">
+      <div className="flex justify-center -mt-4">
         <img
           src={agentImage}
           alt="AI Agent"
-          className="w-16 h-16 object-contain rounded-full shadow-[0_0_15px_rgba(0,255,255,0.4)]"
+          className="w-12 h-12 object-contain rounded-full shadow-[0_0_12px_rgba(0,255,255,0.3)]"
         />
       </div>
 
       {/* Agent Name */}
-      <h3 className="mt-3 text-lg font-bold text-cyan-300 text-center group-hover:text-cyan-200 truncate">
+      <h3 className="mt-2 text-base font-bold text-cyan-300 text-center group-hover:text-cyan-200 truncate">
         {agent.name}
       </h3>
 
       {/* Description */}
-      <p className="mt-1 text-sm text-gray-400 text-center line-clamp-1">
+      <p className="mt-0.5 text-xs text-gray-400 text-center line-clamp-1">
         {agent.description || "No description provided"}
       </p>
 
       {/* Language + Timezone */}
-      <div className="mt-3 flex justify-center text-xs text-gray-400 gap-2">
+      <div className="mt-2 flex justify-center text-xs text-gray-400 gap-2">
         {agent.language && <span>{agent.language}</span>}
         {agent.timezone && <span>{agent.timezone}</span>}
       </div>

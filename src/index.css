@@ -7,6 +7,31 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.4);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.6);
+}
+
+/* Firefox Scrollbar */
+* {
+  scrollbar-color: rgba(34, 211, 238, 0.4) rgba(0, 0, 0, 0.2);
+  scrollbar-width: thin;
+}
+
 @keyframes gridMove {
   0% { transform: translateY(0px); }
   100% { transform: translateY(40px); }

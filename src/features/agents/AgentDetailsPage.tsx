@@ -3,6 +3,7 @@ import { useParams, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import AgentTabs from "./components/AgentTabs.tsx"
 import AgentLoader from "./components/AgentLoader"
+import AgentCall from "../../components/AgentCall.tsx"
 import { PlayCircle, Rocket, Trash2, Loader2, X } from "lucide-react"
 import { getAgentById, updateAgent } from "./api"
 import useDeleteAgent from "./hooks/useDeleteAgent"
@@ -13,12 +14,13 @@ export default function AgentDetailsPage() {
   const { agentId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  
+
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
   const [deploying, setDeploying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showTestModal, setShowTestModal] = useState(false)   // ← new
 
   // Form states for each tab
   const [configFormData, setConfigFormData] = useState({
@@ -38,7 +40,6 @@ export default function AgentDetailsPage() {
   const { Delete, loading: deleteLoading } = useDeleteAgent()
   const { agentKBs, fetchAgentKnowledgeBases, assign, remove } = useKnowledgeBase({ agentId: agentId || "" })
 
-  // Load agent data only once on mount
   useEffect(() => {
     if (!agentId) return
 
@@ -46,7 +47,6 @@ export default function AgentDetailsPage() {
       try {
         setLoading(true)
 
-        // Check if agent data is passed through navigation state (new agent)
         const locationState = location.state as {
           agent?: Agent
           isNewAgent?: boolean
@@ -56,16 +56,12 @@ export default function AgentDetailsPage() {
         if (locationState?.isNewAgent && locationState?.agent) {
           loadedAgent = locationState.agent
         } else {
-          // Fetch existing agent from API only once
           loadedAgent = await getAgentById(agentId)
         }
 
         setAgent(loadedAgent)
-        
-        // Fetch agent's knowledge bases
         await fetchAgentKnowledgeBases(agentId)
-        
-        // Initialize form data
+
         setConfigFormData({
           name: loadedAgent.name || "",
           voice: loadedAgent.voice || "Alloy",
@@ -73,7 +69,6 @@ export default function AgentDetailsPage() {
           timezone: loadedAgent.timezone || "Asia/Kolkata",
         })
 
-        // Initialize prompt form data
         setPromptFormData({
           system_prompt: loadedAgent.system_prompt || "",
           first_message: loadedAgent.first_message || "",
@@ -90,7 +85,6 @@ export default function AgentDetailsPage() {
     fetchAgent()
   }, [agentId])
 
-  // Initialize selected KB IDs from loaded agent KBs
   useEffect(() => {
     if (agentKBs.length > 0) {
       const kbIds = new Set(agentKBs.map(kb => kb.knowledge_base.id))
@@ -101,16 +95,12 @@ export default function AgentDetailsPage() {
 
   const handleDeleteAgent = async () => {
     if (!agent) return
-
     try {
       const result = await Delete(agent.id)
-
       if (result.success) {
         toast.success("Agent deleted successfully!")
         setShowDeleteModal(false)
-        setTimeout(() => {
-          navigate("/dashboard/agents")
-        }, 1000)
+        setTimeout(() => navigate("/dashboard/agents"), 1000)
       } else {
         toast.error(result.error || "Failed to delete agent")
       }
@@ -121,63 +111,37 @@ export default function AgentDetailsPage() {
 
   const handleDeploy = async () => {
     if (!agent) return
-
     try {
       setDeploying(true)
 
-      // Combine config and prompt data for update
-      const updateData = {
-        ...configFormData,
-        ...promptFormData,
-      }
-
-      // Save all changes (config + prompt)
+      const updateData = { ...configFormData, ...promptFormData }
       await updateAgent(agent.id, updateData)
-      
-      // Handle Knowledge Base changes
+
       const currentKBIds = originalKBIds
-      
-      // Find KBs to add (newly selected)
       const toAdd = Array.from(selectedKBIds).filter((id: string) => !currentKBIds.has(id))
-      // Find KBs to remove (unchecked)
       const toRemove = Array.from(currentKBIds).filter((id: string) => !selectedKBIds.has(id))
 
-      // Assign new KBs
       for (const kbId of toAdd) {
         const result = await assign(agent.id, kbId as string)
-        if (!result.success) {
-          toast.error(`Failed to assign KB`)
-          return
-        }
+        if (!result.success) { toast.error("Failed to assign KB"); return }
       }
-
-      // Remove KBs
       for (const kbId of toRemove) {
         const result = await remove(agent.id, kbId as string)
-        if (!result.success) {
-          toast.error(`Failed to remove KB`)
-          return
-        }
+        if (!result.success) { toast.error("Failed to remove KB"); return }
       }
 
-      // Update original KB IDs to reflect new state
       setOriginalKBIds(new Set(selectedKBIds))
 
-      // Fetch the updated agent to show latest saved data
       const refreshedAgent = await getAgentById(agent.id)
       setAgent(refreshedAgent)
-
-      // Refetch agent's knowledge bases to update "Saved" badges
       await fetchAgentKnowledgeBases(agent.id)
-      
-      // Update form data with refreshed agent data
+
       setConfigFormData({
         name: refreshedAgent.name || "",
         voice: refreshedAgent.voice || "Alloy",
         language: refreshedAgent.language || "English",
         timezone: refreshedAgent.timezone || "Asia/Kolkata",
       })
-
       setPromptFormData({
         system_prompt: refreshedAgent.system_prompt || "",
         first_message: refreshedAgent.first_message || "",
@@ -205,18 +169,18 @@ export default function AgentDetailsPage() {
           {/* Agent Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-cyan-300">
-                Agent Builder
-              </h1>
-
-              <p className="text-gray-400 text-sm">
-                Agent: {agent.name}
-              </p>
+              <h1 className="text-3xl font-bold text-cyan-300">Agent Builder</h1>
+              <p className="text-gray-400 text-sm">Agent: {agent.name}</p>
             </div>
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <button className="flex items-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 px-4 py-2 rounded-xl text-cyan-300 text-sm transition">
+
+              {/* ── Test Assistant button ── */}
+              <button
+                onClick={() => setShowTestModal(true)}
+                className="flex items-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 px-4 py-2 rounded-xl text-cyan-300 text-sm transition"
+              >
                 <PlayCircle size={16} />
                 Test Assistant
               </button>
@@ -227,15 +191,9 @@ export default function AgentDetailsPage() {
                 className="flex items-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-400/30 px-4 py-2 rounded-xl text-purple-300 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deploying ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Deploying...
-                  </>
+                  <><Loader2 size={16} className="animate-spin" />Deploying...</>
                 ) : (
-                  <>
-                    <Rocket size={16} />
-                    Deploy
-                  </>
+                  <><Rocket size={16} />Deploy</>
                 )}
               </button>
 
@@ -250,8 +208,8 @@ export default function AgentDetailsPage() {
           </div>
 
           {/* Tabs */}
-          <AgentTabs 
-            agent={agent} 
+          <AgentTabs
+            agent={agent}
             configFormData={configFormData}
             onConfigChange={setConfigFormData}
             promptFormData={promptFormData}
@@ -260,7 +218,37 @@ export default function AgentDetailsPage() {
             onSelectedKBsChange={setSelectedKBIds}
           />
 
-          {/* Delete Confirmation Modal */}
+          {/* ── Test Assistant Modal ────────────────────────────────────── */}
+          {showTestModal && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+              <div className="bg-[#0b1220] border border-cyan-400/20 rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col">
+
+                {/* Modal header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-gradient-to-r from-cyan-500/5 to-transparent">
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Test Voice Assistant</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{agent.name}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowTestModal(false)}
+                    className="text-gray-400 hover:text-white transition"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                {/* AgentCall component */}
+                <div className="flex-1 overflow-hidden p-6">
+                  <AgentCall
+                    apiBaseUrl={import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"}
+                  />
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ── Delete Confirmation Modal ───────────────────────────────── */}
           {showDeleteModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
               <div className="bg-[#0b1220] border border-red-400/30 rounded-2xl p-6 max-w-md shadow-2xl">
@@ -300,15 +288,9 @@ export default function AgentDetailsPage() {
                     className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-400/50 rounded-lg text-red-300 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {deleteLoading ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Deleting...
-                      </>
+                      <><Loader2 size={16} className="animate-spin" />Deleting...</>
                     ) : (
-                      <>
-                        <Trash2 size={16} />
-                        Delete Agent
-                      </>
+                      <><Trash2 size={16} />Delete Agent</>
                     )}
                   </button>
                 </div>

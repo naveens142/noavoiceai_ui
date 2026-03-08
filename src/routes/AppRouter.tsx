@@ -19,6 +19,7 @@ import PhoneNumbersPage from "../pages/PhoneNumbersPage"
 import CallLogsPage from "../pages/CallLogsPage"
 import AnalyticsPage from "../pages/AnalyticsPage"
 import SettingsPage from "../pages/SettingsPage"
+import TestConnectionPage from "../pages/TestConnectionPage"
 
 export default function AppRouter() {
   return (
@@ -28,6 +29,7 @@ export default function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/auth/callback" element={<GoogleCallback />} />
+      <Route path="/test-connection" element={<TestConnectionPage />} />
 
       {/* Welcome */}
       <Route
