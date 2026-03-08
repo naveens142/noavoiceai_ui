@@ -22,4 +22,24 @@ export interface Agent {
 
 export interface AgentsResponse {
   items: Agent[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export interface KnowledgeBase {
+  id: string
+  document_name: string
+  file_name: string
+  file_type: string
+  file_size: number
+  created_at: string
+}
+
+export interface KnowledgeBaseAssignment {
+  id: string
+  knowledge_base: KnowledgeBase
+  is_enabled: boolean
+  created_at: string
 }

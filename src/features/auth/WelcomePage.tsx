@@ -2,7 +2,8 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { LogOut, LayoutDashboard } from "lucide-react"
 import { motion } from "framer-motion"
-import axios from "axios"
+import { useAuthStore } from "./store"
+import axios from "../../api/axios"
 
 interface User {
   email: string
@@ -11,21 +12,18 @@ interface User {
 
 export default function WelcomePage() {
   const navigate = useNavigate()
+  const { accessToken, logout } = useAuthStore()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token")
-
-    if (!token) {
+    if (!accessToken) {
       navigate("/login")
       return
     }
 
     axios
-      .get("http://localhost:8000/api/v1/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      .get("/api/v1/auth/me")
       .then((res) => {
         setUser(res.data)
         setLoading(false)
@@ -33,16 +31,16 @@ export default function WelcomePage() {
       .catch(() => {
         navigate("/login")
       })
-  }, [navigate])
+  }, [navigate, accessToken])
 
   const handleLogout = () => {
-    localStorage.clear()
+    logout()
     navigate("/login")
   }
 
   const handleGoDashboard = () => {
-      localStorage.setItem("onboarding_complete", "true")
-      navigate("/dashboard")
+    localStorage.setItem("onboarding_complete", "true")
+    navigate("/dashboard")
   }
 
   if (loading) {

@@ -2,12 +2,9 @@ import { useState } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import BackgroundEffects from "../BackgroundEffects";
+import { Outlet } from "react-router-dom";
 
-interface Props {
-  children: React.ReactNode;
-}
-
-export default function DashboardLayout({ children }: Props) {
+export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -43,7 +40,9 @@ export default function DashboardLayout({ children }: Props) {
           onHideSidebar={() => setHidden(!hidden)}
         />
 
-        <main className="p-6 relative z-10">{children}</main>
+        <main className="p-6 relative z-10">
+          <Outlet />
+        </main>
       </div>
     </div>
   );

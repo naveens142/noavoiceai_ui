@@ -6,6 +6,7 @@ interface Props {
   agent: Agent
 }
 
+
 export default function AgentCard({ agent }: Props) {
   const navigate = useNavigate()
 

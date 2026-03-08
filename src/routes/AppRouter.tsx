@@ -10,16 +10,26 @@ import DashboardLayout from "../components/layout/DashboardLayout"
 
 import DashboardPage from "../pages/DashboardPage"
 import AgentsPage from "../features/agents/AgentsPage"
+import AgentDetailsPage from "../features/agents/AgentDetailsPage"
+import ActionsPage from "../features/agents/pages/ActionsPage"
+import ToolsPage from "../pages/ToolsPage"
+import KnowledgeBasePage from "../pages/KnowledgeBasePage"
+import CampaignsPage from "../pages/CampaignsPage"
+import PhoneNumbersPage from "../pages/PhoneNumbersPage"
+import CallLogsPage from "../pages/CallLogsPage"
+import AnalyticsPage from "../pages/AnalyticsPage"
+import SettingsPage from "../pages/SettingsPage"
 
 export default function AppRouter() {
   return (
     <Routes>
+
       {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/auth/callback" element={<GoogleCallback />} />
 
-      {/* Welcome (keep separate for now) */}
+      {/* Welcome */}
       <Route
         path="/welcome"
         element={
@@ -29,31 +39,57 @@ export default function AppRouter() {
         }
       />
 
-      {/* Dashboard Routes */}
+      {/* Dashboard Layout */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <DashboardPage />
-            </DashboardLayout>
+            <DashboardLayout />
           </ProtectedRoute>
         }
-      />
+      >
 
-      <Route
-        path="/agents"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <AgentsPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
+        {/* Dashboard Home */}
+        <Route index element={<DashboardPage />} />
+
+        {/* Agents List */}
+        <Route path="agents" element={<AgentsPage />} />
+
+        {/* Agent Details */}
+        <Route path="agents/:agentId" element={<AgentDetailsPage />} />
+
+        {/* Actions */}
+        <Route path="actions" element={<ActionsPage />} />
+
+        {/* Tools */}
+        <Route path="tools" element={<ToolsPage />} />
+
+        {/* Knowledge Base */}
+        <Route path="knowledge" element={<KnowledgeBasePage />} />
+
+        {/* Campaigns */}
+        <Route path="campaigns" element={<CampaignsPage />} />
+
+        {/* Phone Numbers */}
+        <Route path="numbers" element={<PhoneNumbersPage />} />
+
+        {/* Call Logs */}
+        <Route path="calls" element={<CallLogsPage />} />
+
+        {/* Analytics */}
+        <Route path="analytics" element={<AnalyticsPage />} />
+
+        {/* Settings */}
+        <Route path="settings" element={<SettingsPage />} />
+
+      </Route>
 
       {/* Default Redirect */}
       <Route path="/" element={<Navigate to="/login" />} />
+
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/login" />} />
+
     </Routes>
   )
 }

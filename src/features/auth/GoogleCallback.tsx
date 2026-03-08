@@ -16,6 +16,11 @@ export default function GoogleCallback() {
     const accessToken = params.get("access_token")
     const refreshToken = params.get("refresh_token")
 
+    console.log("🔑 GoogleCallback - Tokens received:", {
+      accessToken: accessToken ? "✓ Present" : "✗ Missing",
+      refreshToken: refreshToken ? "✓ Present" : "✗ Missing",
+    })
+
     if (!accessToken || !refreshToken) {
       toast.error("Google authentication failed")
       navigate("/")
@@ -25,7 +30,9 @@ export default function GoogleCallback() {
     async function completeLogin() {
       try {
         // Set tokens first - this must happen before API calls
+        console.log("💾 Saving tokens to store...")
         setTokens(accessToken as string, refreshToken as string)
+        console.log("✅ Tokens saved, store state:", useAuthStore.getState())
 
         // Create a temporary request with the token to ensure it's set
         // Wait a tick to let the store update

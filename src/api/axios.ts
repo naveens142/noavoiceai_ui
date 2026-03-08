@@ -8,6 +8,7 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken
+  console.log("🔐 Axios Request - Token:", token ? "✓ Present" : "✗ Missing")
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -20,8 +21,11 @@ api.interceptors.response.use(
     const originalRequest = error.config
     const refreshToken = useAuthStore.getState().refreshToken
 
+    console.log("❌ API Error:", error.response?.status, error.config?.url)
+
     if (error.response?.status === 401 && refreshToken) {
       try {
+        console.log("🔄 Attempting token refresh...")
         const data = await refreshTokenApi(refreshToken)
 
         useAuthStore
@@ -31,6 +35,7 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${data.access_token}`
         return api(originalRequest)
       } catch (err) {
+        console.log("🚫 Token refresh failed, logging out...")
         useAuthStore.getState().logout()
         window.location.href = "/"
       }

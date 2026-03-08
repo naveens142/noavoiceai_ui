@@ -2,6 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Bot,
+  Zap,
   Wrench,
   BookOpen,
   Megaphone,
@@ -35,14 +36,15 @@ export default function Sidebar({
 
   const menuItems = [
     { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-    { name: "Agents", icon: Bot, path: "/agents" },
-    { name: "Tools", icon: Wrench, path: "/tools" },
-    { name: "Knowledge Base", icon: BookOpen, path: "/knowledge" },
-    { name: "Campaigns", icon: Megaphone, path: "/campaigns" },
-    { name: "Phone Numbers", icon: Phone, path: "/numbers" },
-    { name: "Call Logs", icon: PhoneCall, path: "/calls" },
-    { name: "Analytics", icon: BarChart3, path: "/analytics" },
-    { name: "Settings", icon: Settings, path: "/settings" },
+    { name: "Agents", icon: Bot, path: "/dashboard/agents" },
+    { name: "Actions", icon: Zap, path: "/dashboard/actions" },
+    { name: "Tools", icon: Wrench, path: "/dashboard/tools" },
+    { name: "Knowledge Base", icon: BookOpen, path: "/dashboard/knowledge" },
+    { name: "Campaigns", icon: Megaphone, path: "/dashboard/campaigns" },
+    { name: "Phone Numbers", icon: Phone, path: "/dashboard/numbers" },
+    { name: "Call Logs", icon: PhoneCall, path: "/dashboard/calls" },
+    { name: "Analytics", icon: BarChart3, path: "/dashboard/analytics" },
+    { name: "Settings", icon: Settings, path: "/dashboard/settings" },
   ];
 
   return (
@@ -93,7 +95,9 @@ export default function Sidebar({
       <nav className="flex-1 px-2 space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname.startsWith(item.path);
+          const isActive = item.path === "/dashboard" 
+            ? location.pathname === "/dashboard"
+            : location.pathname.startsWith(item.path);
 
           return (
             <NavLink
@@ -118,8 +122,8 @@ export default function Sidebar({
           );
         })}
       </nav>
-
-      {/* Hide Button */}
+{/* 
+      Hide Button
       <div className="p-4 border-t border-white/10">
         <button
           onClick={() => setHidden(true)}
@@ -128,7 +132,7 @@ export default function Sidebar({
           <EyeOff size={16} />
           {!collapsed && <span>Hide Sidebar</span>}
         </button>
-      </div>
+      </div> */}
     </aside>
   );
 }

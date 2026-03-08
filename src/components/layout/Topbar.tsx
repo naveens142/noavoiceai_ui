@@ -2,6 +2,7 @@ import { Menu, LogOut } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
 import axios from "../../api/axios"
+import { useAuthStore } from "../../features/auth/store"
 
 interface Props {
   onMenuClick: () => void
@@ -15,6 +16,7 @@ interface User {
 
 export default function Topbar({ onMenuClick }: Props) {
   const navigate = useNavigate()
+  const { logout } = useAuthStore()
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
@@ -31,9 +33,7 @@ export default function Topbar({ onMenuClick }: Props) {
   }, [])
 
   const handleLogout = () => {
-    localStorage.removeItem("access_token")
-    localStorage.removeItem("refresh_token")
-    // Keep onboarding flag as per our temporary logic
+    logout()
     navigate("/login")
   }
 
