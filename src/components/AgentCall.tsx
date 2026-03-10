@@ -193,7 +193,7 @@ return (
   <div className="flex gap-6 h-[600px] w-full overflow-hidden">
 
     {/* LEFT PANEL (Fixed) */}
-    <div className="flex flex-col items-center justify-center gap-8 w-38 flex-shrink-0">
+    <div className="flex flex-col items-center justify-center gap-8 w-45 flex-shrink-0">
 
       {/* Agent */}
       <div className="flex flex-col items-center gap-4">

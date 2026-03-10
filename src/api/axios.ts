@@ -2,8 +2,12 @@ import axios from "axios"
 import { useAuthStore } from "../features/auth/store"
 import { refreshToken as refreshTokenApi } from "../features/auth/api"
 
+const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
+
+console.log("🌐 API Base URL:", baseURL)
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL,
 })
 
 api.interceptors.request.use((config) => {
