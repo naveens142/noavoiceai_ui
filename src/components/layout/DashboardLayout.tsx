@@ -40,7 +40,7 @@ export default function DashboardLayout() {
           onHideSidebar={() => setHidden(!hidden)}
         />
 
-        <main className="p-6 relative z-10">
+        <main className="p-4 sm:p-6 relative z-10">
           <Outlet />
         </main>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import AgentTabs from "./components/AgentTabs.tsx"
@@ -39,6 +39,9 @@ export default function AgentDetailsPage() {
 
   const { Delete, loading: deleteLoading } = useDeleteAgent()
   const { agentKBs, fetchAgentKnowledgeBases, assign, remove } = useKnowledgeBase({ agentId: agentId || "" })
+
+  // Prevent concurrent deploy calls
+  const deployInProgressRef = useRef(false)
 
   useEffect(() => {
     if (!agentId) return
@@ -111,6 +114,15 @@ export default function AgentDetailsPage() {
 
   const handleDeploy = async () => {
     if (!agent) return
+    
+    // Prevent concurrent deploy requests
+    if (deployInProgressRef.current) {
+      toast.error("Deployment in progress. Please wait.")
+      return
+    }
+    
+    deployInProgressRef.current = true
+    
     try {
       setDeploying(true)
 
@@ -132,27 +144,28 @@ export default function AgentDetailsPage() {
 
       setOriginalKBIds(new Set(selectedKBIds))
 
-      const refreshedAgent = await getAgentById(agent.id)
-      setAgent(refreshedAgent)
-      await fetchAgentKnowledgeBases(agent.id)
+      // const refreshedAgent = await getAgentById(agent.id)
+      // setAgent(refreshedAgent)
+      // await fetchAgentKnowledgeBases(agent.id)
 
-      setConfigFormData({
-        name: refreshedAgent.name || "",
-        voice: refreshedAgent.voice || "Alloy",
-        language: refreshedAgent.language || "English",
-        timezone: refreshedAgent.timezone || "Asia/Kolkata",
-      })
-      setPromptFormData({
-        system_prompt: refreshedAgent.system_prompt || "",
-        first_message: refreshedAgent.first_message || "",
-        end_call_message: refreshedAgent.end_call_message || "",
-      })
+      // setConfigFormData({
+      //   name: refreshedAgent.name || "",
+      //   voice: refreshedAgent.voice || "Alloy",
+      //   language: refreshedAgent.language || "English",
+      //   timezone: refreshedAgent.timezone || "Asia/Kolkata",
+      // })
+      // setPromptFormData({
+      //   system_prompt: refreshedAgent.system_prompt || "",
+      //   first_message: refreshedAgent.first_message || "",
+      //   end_call_message: refreshedAgent.end_call_message || "",
+      // })
 
       toast.success("Agent deployed successfully!")
     } catch (error: any) {
       toast.error(error.message || "Failed to deploy agent")
     } finally {
       setDeploying(false)
+      deployInProgressRef.current = false
     }
   }
 
@@ -167,42 +180,44 @@ export default function AgentDetailsPage() {
       ) : agent ? (
         <>
           {/* Agent Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
             <div>
-              <h1 className="text-3xl font-bold text-cyan-300">Agent Builder</h1>
-              <p className="text-gray-400 text-sm">Agent: {agent.name}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-cyan-300">Agent Builder</h1>
+              <p className="text-gray-400 text-xs sm:text-sm">Agent: {agent.name}</p>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
 
               {/* ── Test Assistant button ── */}
               <button
                 onClick={() => setShowTestModal(true)}
-                className="flex items-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 px-4 py-2 rounded-xl text-cyan-300 text-sm transition"
+                className="flex items-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 px-3 sm:px-4 py-2 rounded-xl text-cyan-300 text-xs sm:text-sm transition flex-1 sm:flex-none justify-center sm:justify-start"
               >
-                <PlayCircle size={16} />
-                Test Assistant
+                <PlayCircle size={14} className="sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Test Assistant</span>
+                <span className="sm:hidden">Test</span>
               </button>
 
               <button
                 onClick={handleDeploy}
                 disabled={deploying}
-                className="flex items-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-400/30 px-4 py-2 rounded-xl text-purple-300 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-400/30 px-3 sm:px-4 py-2 rounded-xl text-purple-300 text-xs sm:text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none justify-center sm:justify-start"
               >
                 {deploying ? (
-                  <><Loader2 size={16} className="animate-spin" />Deploying...</>
+                  <><Loader2 size={14} className="animate-spin sm:w-4 sm:h-4" /><span className="hidden sm:inline">Deploying...</span><span className="sm:hidden">Deploying</span></>
                 ) : (
-                  <><Rocket size={16} />Deploy</>
+                  <><Rocket size={14} className="sm:w-4 sm:h-4" /><span className="hidden sm:inline">Deploy</span><span className="sm:hidden">Deploy</span></>
                 )}
               </button>
 
               <button
                 onClick={() => setShowDeleteModal(true)}
-                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-400/30 px-4 py-2 rounded-xl text-red-300 text-sm transition"
+                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-400/30 px-3 sm:px-4 py-2 rounded-xl text-red-300 text-xs sm:text-sm transition flex-1 sm:flex-none justify-center sm:justify-start"
               >
-                <Trash2 size={16} />
-                Delete
+                <Trash2 size={14} className="sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Delete</span>
+                <span className="sm:hidden">Delete</span>
               </button>
             </div>
           </div>
