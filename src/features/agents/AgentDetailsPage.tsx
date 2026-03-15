@@ -254,9 +254,7 @@ export default function AgentDetailsPage() {
 
                 {/* AgentCall component */}
                 <div className="flex-1 overflow-hidden p-6">
-                  <AgentCall
-                    apiBaseUrl={import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"}
-                  />
+                  <AgentCall/>
                 </div>
 
               </div>

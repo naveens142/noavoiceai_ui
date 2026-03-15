@@ -1,485 +1,865 @@
 /**
- * AgentCall.tsx
+ * AgentCall.tsx — Daily.co SDK-based Agent Call Component
  *
- * Voice agent component using the Pipecat SDK.
- *
- * Install:
- *   npm install @pipecat-ai/client-js @pipecat-ai/client-react @pipecat-ai/small-webrtc-transport
- *
- * The React SDK only exports:
- *   - PipecatClientProvider
- *   - PipecatClientAudio
- *   - usePipecatClient
- *
- * Events are handled via callbacks passed to PipecatClient constructor,
- * NOT via a useRTVIClientEvent / usePipecatClientEvent hook.
+ * Uses Daily.co SDK to connect to a Pipecat agent with Daily transport.
+ * Endpoint: POST http://localhost:8000/api/v1/agent/sessions/with-bot
  */
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import { PipecatClient } from "@pipecat-ai/client-js"
-import {
-  PipecatClientAudio,
-  PipecatClientProvider,
-  usePipecatClient,
-} from "@pipecat-ai/client-react"
-import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport"
-import { Mic, MicOff, Phone, PhoneOff, Loader2 } from "lucide-react"
+import { useEffect, useRef, useCallback, useState } from "react";
+import { Mic, MicOff, Phone, PhoneOff, Send } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// ── Types
+// ════════════════════════════════════════════════════════════════════════════
 
-type SessionState = "idle" | "connecting" | "connected" | "disconnecting" | "error"
+type SessionState = "idle" | "connecting" | "connected" | "disconnecting" | "error";
 
 interface TranscriptEntry {
-  role: "user" | "agent" | "system"
-  text: string
-  ts: number
+  id: string;
+  role: "user" | "agent" | "system";
+  text: string;
+  ts: number;
+  isStreaming?: boolean;
 }
 
-interface AgentCallProps {
-  apiBaseUrl?: string
+interface SessionResponse {
+  session_id: string;
+  room_url: string;
+  token: string;
+  user_name?: string;
+  status: string;
+  created_at: string;
 }
 
-interface AgentCallInnerProps {
-  apiBaseUrl: string
+interface DailyCallObject {
+  on: (event: string, handler: (evt: any) => void) => DailyCallObject;
+  removeAllListeners?: () => void;
+  join: (opts: { url: string; token: string }) => Promise<void>;
+  leave: () => Promise<void>;
+  destroy: () => void;
+  setLocalAudio: (enabled: boolean) => Promise<void>;
+  sendAppMessage: (msg: any, target: string) => Promise<void>;
 }
 
-// ─── Inner component (must live inside PipecatClientProvider) ─────────────────
+interface DailySDK {
+  createCallObject: (options: any) => DailyCallObject;
+}
 
-function AgentCallInner({ apiBaseUrl = "" }: AgentCallInnerProps) {
-  const client = usePipecatClient()
-  const [state, setState] = useState<SessionState>("idle")
-  const [isMuted, setIsMuted] = useState(false)
-  const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [agentSpeaking, setAgentSpeaking] = useState(false)
-  const [userSpeaking, setUserSpeaking] = useState(false)
-  const [duration, setDuration] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const transcriptRef = useRef<HTMLDivElement>(null)
-
-  // ── Register callbacks on the client once on mount ────────────────────────
-  // Events come via client.on() — there is no usePipecatClientEvent hook
-  useEffect(() => {
-    if (!client) return
-
-    const addEntry = (role: TranscriptEntry["role"], text: string) => {
-      if (!text?.trim()) return
-      setTranscript(prev => [...prev, { role, text: text.trim(), ts: Date.now() }])
-    }
-
-    client.on("connected", () => {
-      setState("connected")
-      setError(null)
-      addEntry("system", "Connected to agent")
-    })
-
-    client.on("disconnected", () => {
-      setState("idle")
-      addEntry("system", "Session ended")
-    })
-
-    client.on("error", (err: any) => {
-      console.error("Pipecat error:", err)
-      setError(err?.message ?? "Connection error. Please try again.")
-      setState("error")
-    })
-
-    client.on("botStartedSpeaking", () => setAgentSpeaking(true))
-    client.on("botStoppedSpeaking", () => setAgentSpeaking(false))
-    client.on("userStartedSpeaking", () => setUserSpeaking(true))
-    client.on("userStoppedSpeaking", () => setUserSpeaking(false))
-
-    client.on("botTranscript", (data: any) => {
-      addEntry("agent", data?.text ?? "")
-    })
-
-    client.on("userTranscript", (data: any) => {
-      if (data?.final) addEntry("user", data?.text ?? "")
-    })
-
-    // Cleanup listeners on unmount
-    return () => {
-      client.removeAllListeners?.()
-    }
-  }, [client])
-
-  // ── Duration timer ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (state === "connected") {
-      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
-      if (state === "idle") setDuration(0)
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [state])
-
-  // ── Auto-scroll transcript ────────────────────────────────────────────────
-  useEffect(() => {
-    if (transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
-    }
-  }, [transcript])
-
-  const formatDuration = (secs: number): string => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0")
-    const s = (secs % 60).toString().padStart(2, "0")
-    return `${m}:${s}`
+declare global {
+  interface Window {
+    Daily?: DailySDK;
+    DailyIframe?: DailySDK;
   }
+}
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-  const handleConnect = useCallback(async () => {
-    if (!client) {
-      setError("Client not initialized")
-      setState("error")
-      return
+// ════════════════════════════════════════════════════════════════════════════
+// ── AgentCall Component
+// ════════════════════════════════════════════════════════════════════════════
+
+export default function AgentCall() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+  return <AgentCallInner apiBaseUrl={apiBaseUrl} />;
+}
+
+/**
+ * ────────────────────────────────────────────────────────────────────────────
+ * Main Call Component
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+function AgentCallInner({ apiBaseUrl }: { apiBaseUrl: string }) {
+  // UI state
+  const [state, setState] = useState<SessionState>("idle");
+  const [isMuted, setIsMuted] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [duration, setDuration] = useState(0);
+  const [textInput, setTextInput] = useState("");
+  const [revealedLength, setRevealedLength] = useState<Record<string, number>>({});
+
+  // Track original transcript count to prevent accidental losses
+  const transcriptCountRef = useRef(0);
+
+  // Refs
+  const callObjectRef = useRef<DailyCallObject | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const sdkLoadedRef = useRef(false);
+
+  // Chat streaming state
+  const botStreamIdRef = useRef<string | null>(null);
+  const botStreamTextRef = useRef("");
+  const interimMsgIdRef = useRef<string | null>(null);
+
+  // Generate unique user ID on mount
+  const userIdRef = useRef<string>("");
+  useEffect(() => {
+    if (!userIdRef.current) {
+      userIdRef.current =
+        crypto.randomUUID?.() || `user-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     }
-    setError(null)
-    setTranscript([])
-    setState("connecting")
-    try {
-      // Get fresh connection details from the backend
-      const resp = await fetch(`${apiBaseUrl}/api/v1/api/agent/connect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })
+  }, []);
 
-      if (!resp.ok) {
-        throw new Error(`Failed to get connection details: ${resp.status}`)
+  // ────────────────────────────────────────────────────────────────────────
+  // Load Daily.co SDK
+  // ────────────────────────────────────────────────────────────────────────
+  const loadDailySDK = useCallback(async (): Promise<DailySDK> => {
+    if (sdkLoadedRef.current && (window.Daily || window.DailyIframe)) {
+      return (window.Daily || window.DailyIframe)!;
+    }
+
+    const urls = [
+      "https://unpkg.com/@daily-co/daily-js",
+      "https://cdn.daily.co/daily-js.js",
+      "https://cdn.jsdelivr.net/npm/@daily-co/daily-js",
+    ];
+
+    for (const url of urls) {
+      try {
+        const script = document.createElement("script");
+        script.src = url;
+        script.async = false;
+        script.crossOrigin = "anonymous";
+
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("timeout")),
+            15000
+          );
+          script.onload = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          script.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error("failed"));
+          };
+          document.head.appendChild(script);
+        });
+
+        // Wait for SDK to be available
+        for (let i = 0; i < 100; i++) {
+          if (window.Daily?.createCallObject || window.DailyIframe?.createCallObject) {
+            sdkLoadedRef.current = true;
+            return (window.Daily || window.DailyIframe)!;
+          }
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      } catch (e) {
+        console.warn(`Daily SDK CDN failed: ${url}`, e);
+      }
+    }
+
+    throw new Error("Could not load Daily.co SDK from any CDN");
+  }, []);
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Helper: Add transcript entry
+  // ────────────────────────────────────────────────────────────────────────
+  const addEntry = useCallback(
+    (role: TranscriptEntry["role"], text: string, id?: string) => {
+      if (!text?.trim()) return;
+      setTranscript((prev) => [
+        ...prev,
+        {
+          id: id || `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          role,
+          text: text.trim(),
+          ts: Date.now(),
+        },
+      ]);
+    },
+    []
+  );
+
+  const updateEntryTextById = useCallback((id: string, text: string) => {
+    setTranscript((prev) =>
+      prev.map((entry) => (entry.id === id ? { ...entry, text } : entry))
+    );
+  }, []);
+
+  // ────────────────────────────────────────────────────────────────────────
+  // App Message Handler
+  // ────────────────────────────────────────────────────────────────────────
+  const handleAppMessage = useCallback(
+    (evt: any) => {
+      try {
+        const msg =
+          typeof evt.data === "string" ? JSON.parse(evt.data) : evt.data;
+        if (!msg?.type) return;
+
+        console.log(`[AppMessage] Received: ${msg.type}`, msg);
+
+        switch (msg.type) {
+          case "user_transcript": {
+            const text = (msg.text || "").trim();
+            if (!text) break;
+
+            if (!msg.final) {
+              // Interim: create or update grey placeholder
+              if (!interimMsgIdRef.current) {
+                interimMsgIdRef.current = `interim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                setTranscript((prev) => [
+                  ...prev,
+                  {
+                    id: interimMsgIdRef.current!,
+                    role: "user",
+                    text,
+                    ts: Date.now(),
+                  },
+                ]);
+              } else {
+                // Update the specific interim user entry by ID
+                updateEntryTextById(interimMsgIdRef.current, text);
+              }
+            } else {
+              // Final: ensure interim text is persisted, even if final arrives first.
+              if (interimMsgIdRef.current) {
+                updateEntryTextById(interimMsgIdRef.current, text);
+                interimMsgIdRef.current = null;
+              } else {
+                addEntry("user", text);
+              }
+            }
+            break;
+          }
+
+          case "bot_text_start": {
+            console.log("[AppMessage] Starting bot text stream");
+            botStreamTextRef.current = "";
+            botStreamIdRef.current = `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            // Create initial empty message that will be filled with chunks
+            setTranscript((prev) => {
+              const updated = [
+                ...prev,
+                {
+                  id: botStreamIdRef.current!,
+                  role: "agent" as TranscriptEntry["role"],
+                  text: "",
+                  ts: Date.now(),
+                  isStreaming: true,
+                },
+              ];
+              console.log("[AppMessage] Created empty bot message. Total messages:", updated.length);
+              return updated;
+            });
+            // Reset reveal length for this message
+            setRevealedLength((prev) => ({ ...prev, [botStreamIdRef.current!]: 0 }));
+            break;
+          }
+
+          case "bot_text_chunk": {
+            const chunk = msg.text || "";
+            if (!chunk) break;
+
+            console.log(`[AppMessage] Bot chunk: +${chunk.length} chars`);
+
+            if (!botStreamIdRef.current) {
+              // Fallback: if start event was missed, create the message now
+              console.log("[AppMessage] No stream started, creating bot message now");
+              botStreamTextRef.current = chunk;
+              botStreamIdRef.current = `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              setTranscript((prev) => [
+                ...prev,
+                {
+                  id: botStreamIdRef.current!,
+                  role: "agent",
+                  text: chunk,
+                  ts: Date.now(),
+                },
+              ]);
+            } else {
+              botStreamTextRef.current += chunk;
+              updateEntryTextById(botStreamIdRef.current, botStreamTextRef.current);
+              console.log("[AppMessage] Updated bot message. Text length:", botStreamTextRef.current.length);
+            }
+            break;
+          }
+
+          case "bot_text_done": {
+            console.log("[AppMessage] Bot stream complete");
+            if (botStreamIdRef.current && botStreamTextRef.current) {
+              updateEntryTextById(botStreamIdRef.current, botStreamTextRef.current);
+              // Mark message as done streaming
+              setTranscript((prev) =>
+                prev.map((entry) =>
+                  entry.id === botStreamIdRef.current
+                    ? { ...entry, isStreaming: false }
+                    : entry
+                )
+              );
+              // Reveal full text
+              setRevealedLength((prev) => ({
+                ...prev,
+                [botStreamIdRef.current!]: botStreamTextRef.current.length,
+              }));
+            }
+            // Just clear the streaming state - message stays in transcript
+            botStreamIdRef.current = null;
+            botStreamTextRef.current = "";
+            break;
+          }
+        }
+      } catch (e) {
+        console.error("Error handling app message:", e);
+      }
+    },
+    [addEntry, updateEntryTextById]
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Daily Event Handlers
+  // ────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
+  // Daily Event Handlers
+  // ────────────────────────────────────────────────────────────────────────
+  const handleJoined = useCallback(() => {
+    console.log("[Daily] ✅ Joined room successfully");
+    setState("connected");
+    setError(null);
+    addEntry("system", "Connected to session - waiting for agent...");
+  }, [addEntry]);
+
+  const handleLeft = useCallback(() => {
+    console.log("[Daily] ⚠️ LEFT ROOM EVENT");
+    console.log("[Daily] Transcript at disconnect:", transcript.length, "messages");
+    console.log("[Daily] Full transcript:", transcript);
+    setState("idle");
+    addEntry("system", "Session ended");
+  }, [addEntry, transcript]);
+
+  const handleParticipantJoined = useCallback(
+    (evt: any) => {
+      const name = evt.participant?.user_name || "Unknown";
+      console.log(`[Daily] Participant joined: ${name}`);
+      if (name === "Pipecat Agent") {
+        console.log("[Daily] Agent online");
+        addEntry("system", "Agent connected");
+      }
+    },
+    [addEntry]
+  );
+
+  const handleParticipantLeft = useCallback(
+    (evt: any) => {
+      const name = evt.participant?.user_name || "Unknown";
+      console.log(`[Daily] Participant left: ${name}`);
+      console.log(`[Daily] Current transcript: ${transcript.length} messages`);
+      if (name === "Pipecat Agent") {
+        console.log("[Daily] Agent disconnected");
+        addEntry("system", "Agent disconnected");
+      }
+    },
+    [addEntry, transcript]
+  );
+
+  const handleActiveSpeaker = useCallback((evt: any) => {
+    // Track active speaker for audio cues or future UI enhancements
+    const name = evt.activeSpeaker?.user_name || "";
+    console.log("[Daily] Active speaker:", name);
+  }, []);
+
+  const handleTrackStarted = useCallback((evt: any) => {
+    if (evt.track?.kind !== "audio") return;
+    const name = evt.participant?.user_name || "unknown";
+    console.log(`[Daily] Audio track from: ${name}`);
+    if (name === "Pipecat Agent") {
+      try {
+        const audio = new Audio();
+        audio.srcObject = new MediaStream([evt.track]);
+        audio.autoplay = true;
+        audio.volume = 1.0;
+        document.body.appendChild(audio);
+        audio.play().catch((e) => console.warn("Audio playback error:", e));
+      } catch (e) {
+        console.error("Audio setup error:", e);
+      }
+    }
+  }, []);
+
+  const handleDailyError = useCallback((err: any) => {
+    const msg =
+      err?.message || err?.errorMsg || JSON.stringify(err) || "Unknown error";
+    console.error("[Daily] Error:", msg);
+    setError(msg);
+    setState("error");
+  }, []);
+
+
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Start Session
+  // ────────────────────────────────────────────────────────────────────────
+  const handleConnect = useCallback(async () => {
+    setError(null);
+    console.log("[handleConnect] Starting connection, clearing old transcript");
+    setTranscript([]);
+    transcriptCountRef.current = 0;
+    botStreamIdRef.current = null;
+    botStreamTextRef.current = "";
+    interimMsgIdRef.current = null;
+    setState("connecting");
+
+    try {
+      // Request microphone
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e: any) {
+        throw new Error(`Microphone access denied: ${e.message}`);
       }
 
-      const { rtc_url, session_id } = await resp.json()
-      console.log("[AgentCall] handleConnect - rtc_url:", rtc_url, "session_id:", session_id)
+      // Load Daily SDK
+      const DailySDK = await loadDailySDK();
+      console.log("[AgentCall] Daily SDK loaded successfully");
 
-      // Call connect with proper connection params for the transport
-      // The endpoint is the WebRTC offer URL and requestData contains the session_id
-      await client.connect({
-        webrtcRequestParams: {
-          endpoint: rtc_url,
-          requestData: session_id ? { session_id } : undefined,
-        },
-      } as any)
+      // Create session via FastAPI endpoint
+      console.log("[AgentCall] Creating session with:", {
+        user_name: "User",
+        user_id: userIdRef.current,
+        endpoint: `${apiBaseUrl}/api/v1/agent/sessions/with-bot`,
+      });
+
+      const resp = await fetch(
+        `${apiBaseUrl}/api/v1/agent/sessions/with-bot`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            user_name: "User",
+            user_id: userIdRef.current 
+          }),
+        }
+      );
+
+      console.log("[AgentCall] Session response status:", resp.status);
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("[AgentCall] Session creation failed:", errText);
+        throw new Error(`Failed to create session: ${resp.status} - ${errText}`);
+      }
+
+      const sessionData: SessionResponse = await resp.json();
+      console.log("[AgentCall] Session created successfully:", {
+        sessionId: sessionData.session_id,
+        roomUrl: sessionData.room_url,
+        token: sessionData.token ? sessionData.token.substring(0, 20) + "..." : "none",
+        status: sessionData.status,
+      });
+
+      if (!sessionData.room_url || !sessionData.token) {
+        console.error("[AgentCall] Missing room_url or token in response:", sessionData);
+        throw new Error("Invalid session response - missing room_url or token");
+      }
+
+      // Create call object
+      const callObject = DailySDK.createCallObject({
+        audioSource: true,
+        videoSource: false,
+      });
+      console.log("[AgentCall] Daily.co call object created");
+
+      // Register event handlers
+      console.log("[AgentCall] Registering event handlers...");
+      callObject
+        .on("joined-meeting", () => {
+          console.log("[Daily Event] joined-meeting fired");
+          handleJoined();
+        })
+        .on("left-meeting", () => {
+          console.log("[Daily Event] left-meeting fired");
+          console.log("[Daily] Transcript at disconnect:", transcript.length, "messages");
+          handleLeft();
+        })
+        .on("participant-joined", (evt) => {
+          console.log("[Daily Event] participant-joined:", evt.participant?.user_name);
+          handleParticipantJoined(evt);
+        })
+        .on("participant-left", (evt) => {
+          console.log("[Daily Event] participant-left:", evt.participant?.user_name);
+          handleParticipantLeft(evt);
+        })
+        .on("active-speaker-change", (evt) => {
+          console.log("[Daily Event] active-speaker-change:", evt.activeSpeaker?.user_name);
+          handleActiveSpeaker(evt);
+        })
+        .on("track-started", (evt) => {
+          console.log("[Daily Event] track-started from:", evt.participant?.user_name);
+          handleTrackStarted(evt);
+        })
+        .on("app-message", (evt) => {
+          console.log("[Daily Event] app-message received:", evt.data);
+          handleAppMessage(evt);
+        })
+        .on("error", (evt) => {
+          console.log("[Daily Event] error:", evt);
+          handleDailyError(evt);
+        });
+      console.log("[AgentCall] Event handlers registered");
+
+      // Join the room
+      console.log("[AgentCall] Joining room with URL:", sessionData.room_url);
+      await callObject.join({
+        url: sessionData.room_url,
+        token: sessionData.token,
+      });
+      console.log("[AgentCall] Successfully joined room");
+
+      callObjectRef.current = callObject;
+      addEntry("system", "Waiting for agent...");
     } catch (err: any) {
-      console.error("Connect failed:", err)
-      setError(err?.message ?? "Failed to connect. Is the agent running?")
-      setState("error")
+      console.error("[AgentCall] Connect error:", err);
+      setError(err?.message || "Failed to start session");
+      setState("error");
     }
-  }, [client, apiBaseUrl])
+  }, [
+    apiBaseUrl,
+    loadDailySDK,
+    addEntry,
+    handleJoined,
+    handleLeft,
+    handleParticipantJoined,
+    handleParticipantLeft,
+    handleActiveSpeaker,
+    handleTrackStarted,
+    handleAppMessage,
+    handleDailyError,
+  ]);
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Disconnect
+  // ────────────────────────────────────────────────────────────────────────
   const handleDisconnect = useCallback(async () => {
-    if (!client) return
-    setState("disconnecting")
+    if (!callObjectRef.current) return;
+
+    setState("disconnecting");
     try {
-      await client.disconnect()
-    } catch (err: any) {
-      console.error("Disconnect error:", err)
+      await callObjectRef.current.leave();
+      callObjectRef.current.destroy();
+      callObjectRef.current = null;
+    } catch (err) {
+      console.error("Disconnect error:", err);
     } finally {
-      setState("idle")
+      setState("idle");
+      setIsMuted(false);
+      
+      botStreamIdRef.current = null;
+      botStreamTextRef.current = "";
+      interimMsgIdRef.current = null;
     }
-  }, [client])
+  }, []);
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Mute/Unmute
+  // ────────────────────────────────────────────────────────────────────────
   const handleMute = useCallback(async () => {
-    if (!client) return
-    const next = !isMuted
-    await client.enableMic(!next)
-    setIsMuted(next)
-  }, [client, isMuted])
+    if (!callObjectRef.current) return;
+    const nextMuted = !isMuted;
+    try {
+      await callObjectRef.current.setLocalAudio(!nextMuted);
+      setIsMuted(nextMuted);
+    } catch (err) {
+      console.error("Mute error:", err);
+    }
+  }, [isMuted]);
 
-  const isConnected = state === "connected"
-  const isConnecting = state === "connecting" || state === "disconnecting"
+  // ────────────────────────────────────────────────────────────────────────
+  // Send Text Message
+  // ────────────────────────────────────────────────────────────────────────
+  const handleSendMessage = useCallback(async () => {
+    const msg = textInput.trim();
+    if (!msg || !callObjectRef.current) return;
 
-  // ── Render ────────────────────────────────────────────────────────────────
-return (
-  <div className="flex gap-6 h-[600px] w-full overflow-hidden">
+    try {
+      // Clear input immediately for UX feedback
+      setTextInput("");
 
-    {/* LEFT PANEL (Fixed) */}
-    <div className="flex flex-col items-center justify-center gap-8 w-45 flex-shrink-0">
+      // Send message to backend - it will echo back via user_transcript event
+      await callObjectRef.current.sendAppMessage(
+        {
+          id: `msg-${Date.now()}`,
+          label: "rtvi-ai",
+          type: "user-llm-text",
+          data: { text: msg },
+        },
+        "*"
+      );
+    } catch (err) {
+      console.error("Send message error:", err);
+    }
+  }, [textInput]);
 
-      {/* Agent */}
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative">
 
-          <div className={`absolute inset-0 rounded-full transition-all duration-300 ${
-            agentSpeaking
-              ? "bg-cyan-500/40 blur-2xl scale-110 animate-pulse"
-              : "bg-cyan-500/0"
-          }`} />
+  // ────────────────────────────────────────────────────────────────────────
+  // Duration Timer
+  // ────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (state === "connected") {
+      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (state === "idle") setDuration(0);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [state]);
 
-          <div className={`relative w-32 h-32 rounded-full bg-black/50 border-2 flex items-center justify-center overflow-hidden transition-all duration-300 ${
-            agentSpeaking
-              ? "border-cyan-400 scale-110 shadow-lg shadow-cyan-500/50 ring-2 ring-cyan-500/30"
-              : "border-cyan-500/40 ring-2 ring-cyan-500/20"
-          }`}>
-            <img src="/agent.webp" className="w-full h-full object-cover" />
-          </div>
+  // ────────────────────────────────────────────────────────────────────────
+  // Progressive Text Reveal for Streaming Messages
+  // ────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const streamingMessages = transcript.filter((msg) => msg.isStreaming);
+    if (streamingMessages.length === 0) return;
 
-          {agentSpeaking && (
-            <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-cyan-500 rounded-full animate-pulse border-2 border-white" />
-          )}
-        </div>
+    const interval = setInterval(() => {
+      setRevealedLength((prev) => {
+        const updated = { ...prev };
+        let hasChanges = false;
+        for (const msg of streamingMessages) {
+          const current = prev[msg.id] || 0;
+          const max = msg.text.length;
+          if (current < max) {
+            // Reveal 2-4 characters at a time for smooth animation
+            const charsToReveal = Math.min(4, max - current);
+            updated[msg.id] = current + charsToReveal;
+            hasChanges = true;
+          }
+        }
+        return hasChanges ? updated : prev;
+      });
+    }, 20); // Update every 20ms for smooth animation
 
-        <div className="text-center">
-          <h4 className="text-sm font-bold text-white">Agent</h4>
-          <p className={`text-xs ${
-            agentSpeaking
-              ? "text-cyan-400 font-medium"
-              : "text-gray-500"
-          }`}>
-            {agentSpeaking ? "🎤 Speaking..." : "Listening"}
-          </p>
-        </div>
-      </div>
+    return () => clearInterval(interval);
+  }, [transcript]);
 
-      <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent" />
+  // ────────────────────────────────────────────────────────────────────────
+  // Monitor Transcript Changes (Debug)
+  // ────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const ts = new Date().toLocaleTimeString();
+    if (transcript.length > transcriptCountRef.current) {
+      const newMsg = transcript[transcript.length - 1];
+      console.log(
+        `[${ts}] [Transcript] Added message #${transcript.length}: ${newMsg.role.toUpperCase()}`,
+        newMsg.text.substring(0, 60)
+      );
+      transcriptCountRef.current = transcript.length;
+    } else if (transcript.length < transcriptCountRef.current) {
+      console.warn(
+        `[${ts}] [Transcript] ⚠️ MESSAGES REMOVED! Was: ${transcriptCountRef.current}, now: ${transcript.length}`
+      );
+      console.log("[Transcript] Remaining messages:", transcript);
+      transcriptCountRef.current = transcript.length;
+    }
+  }, [transcript]);
 
-      {/* User */}
-      <div className="flex flex-col items-center gap-4">
+  // ────────────────────────────────────────────────────────────────────────
+  // Auto-scroll Transcript
+  // ────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+    }
+  }, [transcript]);
 
-        <div className="relative">
+  // ────────────────────────────────────────────────────────────────────────
+  // Keyboard Shortcuts
+  // ────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && state === "connected") {
+        handleDisconnect();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [state, handleDisconnect]);
 
-          <div className={`absolute inset-0 rounded-full transition-all duration-300 ${
-            userSpeaking
-              ? "bg-purple-500/40 blur-2xl scale-110 animate-pulse"
-              : "bg-purple-500/0"
-          }`} />
+  // ────────────────────────────────────────────────────────────────────────
+  // Formatting Helpers
+  // ────────────────────────────────────────────────────────────────────────
+  const formatDuration = (secs: number): string => {
+    const m = Math.floor(secs / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
-          <div className={`relative w-32 h-32 rounded-full bg-black/50 border-2 flex items-center justify-center overflow-hidden transition-all duration-300 ${
-            userSpeaking
-              ? "border-purple-400 scale-110 shadow-lg shadow-purple-500/50 ring-2 ring-purple-500/30"
-              : "border-purple-500/40 ring-2 ring-purple-500/20"
-          }`}>
-            <img src="/user.webp" className="w-full h-full object-cover" />
-          </div>
+  const isConnected = state === "connected";
+  const isConnecting = state === "connecting" || state === "disconnecting";
 
-          {userSpeaking && (
-            <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-purple-500 rounded-full animate-pulse border-2 border-white" />
-          )}
-        </div>
-
-        <div className="text-center">
-          <h4 className="text-sm font-bold text-white">You</h4>
-          <p className={`text-xs ${
-            userSpeaking
-              ? "text-purple-400 font-medium"
-              : "text-gray-500"
-          }`}>
-            {userSpeaking ? "🎙️ Speaking..." : "Ready"}
-          </p>
-        </div>
-      </div>
-
-    </div>
-
-    {/* RIGHT PANEL */}
-    <div className="flex flex-col flex-1 min-w-0 h-full">
-
-      {/* STATUS BAR */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-black/30 rounded-lg border border-white/5 mb-3">
-
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${
-            isConnected
-              ? "bg-emerald-400"
-              : state === "error"
-              ? "bg-red-500"
-              : "bg-amber-500"
-          }`} />
-
-          <span className={`text-xs font-medium ${
-            isConnected
-              ? "text-emerald-400"
-              : state === "error"
-              ? "text-red-400"
-              : "text-amber-400"
-          }`}>
-            {isConnected ? "Live" : state === "error" ? "Error" : "Ready"}
-          </span>
-        </div>
-
-        {isConnected && (
-          <span className="text-xs text-gray-500 font-mono">
-            {formatDuration(duration)}
-          </span>
-        )}
-
-      </div>
-
-      {/* CONVERSATION (SCROLLABLE) */}
-      <div className="flex-1 min-h-0 bg-black/40 rounded-xl border border-white/5 p-4 flex flex-col">
-
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-          Conversation
-        </div>
-
-        <div
-          ref={transcriptRef}
-          className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2"
-        >
-
-          {transcript.length === 0 && (
-            <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-              {isConnected
-                ? "Start speaking..."
-                : 'Click "Start Call" to begin'}
-            </div>
-          )}
-
-          {transcript.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${
-                msg.role === "user"
-                  ? "justify-end"
-                  : msg.role === "system"
-                  ? "justify-center"
-                  : "justify-start"
+  // ════════════════════════════════════════════════════════════════════════════
+  // ── Render
+  // ════════════════════════════════════════════════════════════════════════════
+  return (
+    <div className="flex flex-col h-[600px] w-full overflow-hidden bg-gradient-to-b from-black/40 to-black/20">
+      {/* CHAT CONTAINER */}
+      <div className="flex flex-col flex-1 min-w-0 h-full">
+        {/* STATUS BAR */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-black/30 rounded-lg border border-white/5 mb-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isConnected
+                  ? "bg-emerald-400"
+                  : state === "error"
+                    ? "bg-red-500"
+                    : "bg-amber-500"
+              }`}
+            />
+            <span
+              className={`text-xs font-medium ${
+                isConnected
+                  ? "text-emerald-400"
+                  : state === "error"
+                    ? "text-red-400"
+                    : "text-amber-400"
               }`}
             >
-
-              {msg.role === "system" ? (
-                <span className="text-xs text-gray-600 italic">
-                  {msg.text}
-                </span>
-              ) : (
-                <div className={`max-w-xs px-3 py-2 rounded-lg text-xs ${
-                  msg.role === "user"
-                    ? "bg-purple-600/30 border border-purple-400/30"
-                    : "bg-cyan-600/30 border border-cyan-400/30"
-                }`}>
-                  {msg.text}
-                </div>
-              )}
-
-            </div>
-          ))}
-
+              {isConnected ? "Live" : state === "error" ? "Error" : "Ready"}
+            </span>
+          </div>
+          {isConnected && (
+            <span className="text-xs text-gray-500 font-mono">
+              {formatDuration(duration)}
+            </span>
+          )}
         </div>
-      </div>
 
-      {/* FOOTER CONTROLS (FIXED) */}
-      <div className="flex-shrink-0 pt-3">
+        {/* CONVERSATION (SCROLLABLE) */}
+        <div className="flex-1 min-h-0 bg-black/40 rounded-xl border border-white/5 p-4 flex flex-col overflow-hidden">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            Conversation
+          </div>
 
-        <div className="flex gap-2">
+          <div
+            ref={transcriptRef}
+            className="flex-1 overflow-y-auto flex flex-col gap-2"
+          >
+            {transcript.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                {isConnected
+                  ? "Start speaking or type a message..."
+                  : 'Click "Start Call" to begin'}
+              </div>
+            )}
 
-          {!isConnected && !isConnecting ? (
+            {transcript.map((msg) => {
+              const displayText =
+                msg.role === "agent" && msg.isStreaming
+                  ? msg.text.substring(0, revealedLength[msg.id] ?? 0)
+                  : msg.text;
+              
+              // Hide empty agent messages that are still streaming (waiting for chunks)
+              if (msg.role === "agent" && msg.isStreaming && displayText.length === 0) {
+                return null;
+              }
+              
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex ${
+                    msg.role === "user"
+                      ? "justify-end"
+                      : msg.role === "system"
+                        ? "justify-center"
+                        : "justify-start"
+                  } pr-2`}
+                >
+                  {msg.role === "system" ? (
+                    <span className="text-xs text-gray-600 italic">
+                      {msg.text}
+                    </span>
+                  ) : (
+                    <div
+                      className={`max-w-[90%] sm:max-w-xl md:max-w-2xl lg:max-w-3xl px-3 py-2 rounded-lg text-xs break-words ${
+                        msg.role === "user"
+                          ? "bg-purple-600/30 border border-purple-400/30"
+                          : "bg-cyan-600/30 border border-cyan-400/30"
+                      }`}
+                    >
+                      {displayText}
+                      {msg.isStreaming && displayText.length > 0 && (
+                        <span className="animate-pulse">▍</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* TEXT INPUT */}
+        {isConnected && (
+          <div className="flex-shrink-0 flex gap-2 mt-3">
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder="Type a message..."
+              disabled={!isConnected}
+              className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 disabled:opacity-50"
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!textInput.trim() || !isConnected}
+              className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-700 disabled:opacity-50 text-white rounded-lg p-2 transition-colors"
+              title="Send message"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        )}
+
+        {/* CONTROLS */}
+        <div className="flex-shrink-0 flex gap-3 mt-4">
+          {!isConnected ? (
             <button
               onClick={handleConnect}
-              className="flex-1 flex items-center justify-center gap-2 bg-cyan-600/40 hover:bg-cyan-600/60 border border-cyan-400/40 px-4 py-2.5 rounded-lg text-cyan-300 text-sm"
+              disabled={isConnecting}
+              className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition-all duration-200 flex items-center justify-center gap-2"
             >
-              <Phone size={16} />
-              Start Call
+              <PhoneOff size={18} /> Start Call
             </button>
-          ) : isConnected ? (
+          ) : (
             <>
               <button
                 onClick={handleMute}
-                className="px-3 py-2.5 rounded-lg border bg-white/10 border-white/20"
+                title={isMuted ? "Unmute" : "Mute"}
+                className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                  isMuted
+                    ? "bg-red-900/40 border border-red-500/50 text-red-400"
+                    : "bg-cyan-900/40 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-900/60"
+                }`}
               >
-                {isMuted ? <MicOff size={16}/> : <Mic size={16}/>}
+                {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
               </button>
-
               <button
                 onClick={handleDisconnect}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-600/40 hover:bg-red-600/60 border border-red-400/40 px-4 py-2.5 rounded-lg text-red-300 text-sm"
+                disabled={isConnecting}
+                className="flex-1 bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 text-red-400 font-semibold rounded-lg py-3 transition-all flex items-center justify-center gap-2"
               >
-                <PhoneOff size={16} />
-                End Call
+                <Phone size={18} /> End Call
               </button>
             </>
-          ) : (
-            <button
-              disabled
-              className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/10 px-4 py-2.5 rounded-lg text-gray-500"
-            >
-              <Loader2 size={16} className="animate-spin"/>
-              Connecting...
-            </button>
           )}
-
         </div>
 
+        {/* ERROR MESSAGE */}
+        {error && (
+          <div className="flex-shrink-0 mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-xs text-red-300">
+            {error}
+          </div>
+        )}
       </div>
-
     </div>
-
-    <PipecatClientAudio />
-
-  </div>
-)
-}
-
-// ─── Root export ──────────────────────────────────────────────────────────────
-
-export default function AgentCall({ apiBaseUrl = "" }: AgentCallProps) {
-  const [pipecatClient, setPipecatClient] = useState<PipecatClient | null>(null)
-  const [initError, setInitError] = useState<string | null>(null)
-
-  const initClient = useCallback(async () => {
-    setInitError(null)
-    try {
-      // Create transport without connection params yet
-      const transport = new SmallWebRTCTransport()
-
-      const client = new PipecatClient({
-        transport,
-        enableMic: true,
-        enableCam: false,
-        callbacks: {
-          onConnected: () => console.log("[AgentCall] Connected"),
-          onDisconnected: () => console.log("[AgentCall] Disconnected"),
-          onBotReady: () => console.log("[AgentCall] Bot ready"),
-        },
-      })
-
-      setPipecatClient(client)
-    } catch (err: any) {
-      console.error("AgentCall init error:", err)
-      setInitError(err.message ?? "Failed to reach agent")
-    }
-  }, [])
-
-  useEffect(() => {
-    initClient()
-  }, [initClient])
-
-  // Cleanup on unmount and tab close
-  useEffect(() => {
-    const cleanup = () => { pipecatClient?.disconnect().catch(() => {}) }
-    window.addEventListener("beforeunload", cleanup)
-    return () => {
-      window.removeEventListener("beforeunload", cleanup)
-      cleanup()
-    }
-  }, [pipecatClient])
-
-  if (initError) {
-    return (
-      <div className="flex flex-col gap-3">
-        <div className="bg-red-500/10 border border-red-400/20 rounded-lg px-3 py-2 text-xs text-red-300">
-          ⚠️ {initError}
-        </div>
-        <button
-          onClick={initClient}
-          className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl text-gray-300 text-sm transition"
-        >
-          Retry
-        </button>
-      </div>
-    )
-  }
-
-  if (!pipecatClient) {
-    return (
-      <div className="flex items-center justify-center py-8 gap-2 text-gray-500 text-sm">
-        <Loader2 size={16} className="animate-spin" />
-        Initialising…
-      </div>
-    )
-  }
-
-  return (
-    <PipecatClientProvider client={pipecatClient}>
-      <AgentCallInner apiBaseUrl={apiBaseUrl} />
-    </PipecatClientProvider>
-  )
+  );
 }
