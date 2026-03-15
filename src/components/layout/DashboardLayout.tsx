@@ -26,7 +26,6 @@ export default function DashboardLayout() {
         hidden={hidden}
         mobileOpen={mobileOpen}
         setCollapsed={setCollapsed}
-        setHidden={setHidden}
         setMobileOpen={setMobileOpen}
       />
 

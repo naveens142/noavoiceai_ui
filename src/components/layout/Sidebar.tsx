@@ -12,7 +12,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  EyeOff,
 } from "lucide-react";
 
 interface Props {
@@ -20,7 +19,6 @@ interface Props {
   hidden: boolean;
   mobileOpen: boolean;
   setCollapsed: (val: boolean) => void;
-  setHidden: (val: boolean) => void;
   setMobileOpen: (val: boolean) => void;
 }
 
@@ -29,7 +27,6 @@ export default function Sidebar({
   hidden,
   mobileOpen,
   setCollapsed,
-  setHidden,
   setMobileOpen,
 }: Props) {
   const location = useLocation();
