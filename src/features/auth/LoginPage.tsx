@@ -83,7 +83,7 @@ export default function LoginPage() {
             type="button"
             onClick={() =>
                 (window.location.href =
-                "http://localhost:8000/api/v1/auth/google")
+                import.meta.env.VITE_GOOGLE_CALLBACK)
             }
             className="w-full border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black transition p-3 text-sm sm:text-base rounded-lg font-semibold"
             >
